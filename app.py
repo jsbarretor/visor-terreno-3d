@@ -40,13 +40,18 @@ st.caption(
     "para rotar/inclinar la vista, o usa los controles de la izquierda."
 )
 
+# La app arranca en blanco: el usuario escribe la ubicación y pulsa
+# "Generar vista 3D" para que aparezca el mapa.
+if "generado" not in st.session_state:
+    st.session_state.generado = False
+
 with st.sidebar:
     st.header("Ubicación")
 
-    # Centro por defecto: Ibagué, Tolima, Colombia. Cambia estos valores o
-    # usa los campos para ir a cualquier lugar del mundo.
-    lon = st.number_input("Longitud", value=-75.23220, format="%.5f")
-    lat = st.number_input("Latitud", value=4.43890, format="%.5f")
+    lon = st.number_input("Longitud", value=None, format="%.5f", placeholder="Ej: -75.23220")
+    lat = st.number_input("Latitud", value=None, format="%.5f", placeholder="Ej: 4.43890")
+
+    generar = st.button("🔎 Generar vista 3D", type="primary", use_container_width=True)
 
     st.header("Vista")
     zoom = st.slider("Zoom", min_value=3, max_value=17, value=11)
@@ -73,6 +78,28 @@ with st.sidebar:
     st.markdown("---")
     st.caption("Hecho por Sebastian Barreto — jsbarretor@gmail.com")
 
+# Al pulsar el botón, se valida que haya coordenadas y se "activa" la vista.
+if generar:
+    if lon is None or lat is None:
+        st.session_state.generado = False
+        st.error("Escribe una Longitud y una Latitud antes de generar la vista.")
+    else:
+        st.session_state.generado = True
+        st.session_state.lon = lon
+        st.session_state.lat = lat
+
+if not st.session_state.generado:
+    st.info(
+        "👈 Escribe una **Longitud** y una **Latitud** en el panel de la "
+        "izquierda y pulsa **Generar vista 3D** para ver el terreno."
+    )
+    st.stop()
+
+# A partir de aquí ya hay una ubicación confirmada (guardada en session_state
+# para que los sliders de Vista/Mapa base se puedan mover sin perderla).
+lon = st.session_state.lon
+lat = st.session_state.lat
+
 usar_satelite = vista_satelital and bool(maptiler_key)
 
 if vista_satelital and not maptiler_key:
@@ -96,6 +123,19 @@ m = leafmap.Map(
     style=estilo,
     exaggeration=exageracion,
 )
+
+# IMPORTANTE: por un detalle interno de la librería, add_marker/add_geojson
+# no aparecen en el mapa a menos que se active esto (activa la "cola de
+# mensajes" que sí queda incluida al exportar el mapa).
+m.use_message_queue(True)
+
+# Marcador (pin rojo) en la ubicación buscada. Se agrega ligeramente elevado
+# (occludedOpacity=1) para que se vea aunque esté sobre terreno montañoso.
+m.add_marker(
+    lng_lat=[lon, lat],
+    options={"color": "red", "occludedOpacity": 1},
+)
+
 m.add_layer_control(bg_layers=True)
 
 m.to_streamlit(height=750)
